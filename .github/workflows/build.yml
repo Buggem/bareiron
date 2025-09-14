@@ -1,4 +1,4 @@
-name: Build with Cosmopolitan
+name: Build with Emscripten
 
 on:
   push:
@@ -16,18 +16,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Download cosmocc
-        run: |
-          curl -LO https://cosmo.zip/pub/cosmocc/cosmocc.zip
-          unzip cosmocc.zip -d cosmocc
-          echo "$PWD/cosmocc/bin" >> $GITHUB_PATH
-
+        
+      - name: Setup Emscripten toolchain
+        uses: mymindstorm/setup-emsdk@v14
+      
+      - name: Install Node
+        uses: actions/setup-node@v5
+          
       - name: Install JDK 24
         run: |
           curl -LO https://download.java.net/java/GA/jdk24.0.2/fdc5d0102fe0414db21410ad5834341f/12/GPL/openjdk-24.0.2_linux-x64_bin.tar.gz
@@ -43,19 +38,32 @@ jobs:
 
       - name: Generate registry headers
         run: |
-          bun run build_registries.js
+          node build_registries.js
 
       - name: Build project
         run: |
-          cosmocc src/*.c -O3 -Iinclude -o bareiron.exe
-
-      - name: Upload release
-        uses: softprops/action-gh-release@v2
+          emcc src/*.c -O3 -Iinclude -o bareiron.js
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: latest
-          name: Latest build
-          body: "This is a rolling release of bareiron, compiled from the latest commit on the main branch.\n\nThe executable (`bareiron.exe`) is a Cosmopolitan-built polyglot, and should run on Windows and Linux (and Mac?), despite the file extension."
-          files: bareiron.exe
-          prerelease: true
+          name: HLTextureToolsCLI
+          path: |
+            bareiron.js
+  
+      - name: Remove previous release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "continuous" \
+                --yes \
+                --cleanup-tag \
+                --repo "Buggem/bareiron" || true
+
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: Latest Build (GHA)
+          tag: continuous
+          allowUpdates: false
+          artifacts: bareiron.js
