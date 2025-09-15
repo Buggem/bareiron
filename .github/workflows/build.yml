@@ -55,6 +55,8 @@ jobs:
         with:
           name: bareiron-serv
           path: |
+            include/registries.h
+            src/registries.c
             bareiron-serv.zip
   
       - name: Remove previous release
